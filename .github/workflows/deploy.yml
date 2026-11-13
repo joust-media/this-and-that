@@ -1,0 +1,55 @@
+name: Deploy to joustmedia.com
+
+# Uploads the site to https://joustmedia.com/this-and-that/ over FTP on every
+# push to main, or by hand from Actions > "Deploy to joustmedia.com".
+#
+# Uses the same GoDaddy FTP account as joust-media/socialmedia. The three
+# secrets must be added to THIS repo (Settings > Secrets and variables >
+# Actions): FTP_SERVER, FTP_USERNAME, FTP_PASSWORD. Secrets are per-repo.
+#
+# The FTP account's root IS the joustmedia.com document root, so SERVER_DIR is
+# relative to it. Never point it at the root or at portal/ - the guard below
+# refuses those.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-this-and-that
+  cancel-in-progress: false
+
+env:
+  SERVER_DIR: this-and-that/
+
+jobs:
+  deploy:
+    name: Sync files via FTP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard the target folder
+        run: |
+          set -eu
+          case "$SERVER_DIR" in
+            ""|/|./|public_html/|/public_html/|portal/*|portal-staging/*|socialmedia/*)
+              echo "::error::Refusing to deploy to '$SERVER_DIR'."; exit 1 ;;
+            this-and-that/) ;;
+            *) echo "::error::Unexpected SERVER_DIR '$SERVER_DIR'."; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v4
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ${{ env.SERVER_DIR }}
+          local-dir: ./
+          state-name: .ftp-deploy-sync-state-this-and-that.json
+          exclude: |
+            **/.git*
+            **/.git*/**
+            .github/**
+            README.md
